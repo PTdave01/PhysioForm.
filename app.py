@@ -3,20 +3,13 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import cv2
 import numpy as np
-from ultralytics import YOLO
+import mediapipe as mp
 
-# --- 1. PAGE SETUP ---
 st.set_page_config(page_title="PhysioForm")
 st.title("PhysioForm: Clinical Movement Tracker")
 
-# --- 2. LOAD AI ONCE (Prevents crashing) ---
-@st.cache_resource
-def load_model():
-    return YOLO('yolov8n-pose.pt')
+mp_pose = mp.solutions.pose
 
-model = load_model()
-
-# --- 3. MATH ENGINE ---
 def calculate_angle(a, b, c):
     a = np.array(a)
     b = np.array(b)
@@ -27,54 +20,49 @@ def calculate_angle(a, b, c):
         angle = 360 - angle
     return angle
 
-# --- 4. USER INTERFACE ---
 exercise = st.selectbox("Select Exercise to Track", ["Squat", "Bicep Curl"])
 
-# --- 5. VIDEO PROCESSOR (The Thread-Safe Engine) ---
 class PhysioProcessor(VideoProcessorBase):
     def __init__(self):
         self.counter = 0
         self.stage = None
-        self.exercise_type = "Squat" 
+        self.exercise_type = "Squat"
+        self.pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        results = model(img)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = self.pose.process(img_rgb)
         
-        for r in results:
-            keypoints = r.keypoints.xy[0].cpu().numpy()
+        if results.pose_landmarks:
+            landmarks = results.pose_landmarks.landmark
             
-            if len(keypoints) >= 16:
-                # Dynamic Exercise Selection Logic
-                if self.exercise_type == "Squat":
-                    # Hip(11), Knee(13), Ankle(15)
-                    pt1, pt2, pt3 = keypoints[11], keypoints[13], keypoints[15]
-                    down_thresh, up_thresh = 160, 90
-                else: # Bicep Curl
-                    # Shoulder(5), Elbow(7), Wrist(9)
-                    pt1, pt2, pt3 = keypoints[5], keypoints[7], keypoints[9]
-                    down_thresh, up_thresh = 150, 40
+            if self.exercise_type == "Squat":
+                pt1 = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y * img.shape[0]]
+                pt2 = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y * img.shape[0]]
+                pt3 = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y * img.shape[0]]
+                down_thresh, up_thresh = 160, 90
+            else:
+                pt1 = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y * img.shape[0]]
+                pt2 = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y * img.shape[0]]
+                pt3 = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y * img.shape[0]]
+                down_thresh, up_thresh = 150, 40
+
+            angle = calculate_angle(pt1, pt2, pt3)
+            
+            if angle > down_thresh:
+                self.stage = "down"
+            if angle < up_thresh and self.stage == "down":
+                self.stage = "up"
+                self.counter += 1
                 
-                # Check if points exist on screen to avoid math errors
-                if np.all(pt1) and np.all(pt2) and np.all(pt3):
-                    angle = calculate_angle(pt1, pt2, pt3)
-                    
-                    # State Tracking
-                    if angle > down_thresh:
-                        self.stage = "down"
-                    if angle < up_thresh and self.stage == "down":
-                        self.stage = "up"
-                        self.counter += 1
-                        
-                    # Draw UI directly on the video frame
-                    cv2.putText(img, f"{self.exercise_type.upper()} REPS: {self.counter}", 
-                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
-                    cv2.putText(img, f"ANGLE: {int(angle)}", 
-                                (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 3)
+            cv2.putText(img, f"{self.exercise_type.upper()} REPS: {self.counter}", 
+                        (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+            cv2.putText(img, f"ANGLE: {int(angle)}", 
+                        (25, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 3)
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-# --- 6. WEBRTC LAUNCHER (With Firewall Bypass) ---
 ctx = webrtc_streamer(
     key="physioform",
     video_processor_factory=PhysioProcessor,
@@ -90,6 +78,5 @@ ctx = webrtc_streamer(
     }
 )
 
-# Pass the dropdown choice into the live video thread dynamically
 if ctx.video_processor:
     ctx.video_processor.exercise_type = exercise
