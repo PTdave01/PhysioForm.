@@ -8,6 +8,7 @@ import mediapipe as mp
 st.set_page_config(page_title="PhysioForm")
 st.title("PhysioForm: Clinical Movement Tracker")
 
+import mediapipe as mp
 mp_pose = mp.solutions.pose
 
 def calculate_angle(a, b, c):
