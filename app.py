@@ -2,13 +2,13 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import cv2
-import numpy as np
+import numpy as np 
 import mediapipe as mp
-
+import mediapipe.python.solutions.pose as mp_pose 
 st.set_page_config(page_title="PhysioForm")
 st.title("PhysioForm: Clinical Movement Tracker")
 
-mp_pose = mp.solutions.pose
+
 
 def calculate_angle(a, b, c):
     a = np.array(a)
