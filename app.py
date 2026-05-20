@@ -2,13 +2,15 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import cv2
-import numpy as np 
+import numpy as np
 import mediapipe as mp
-import mediapipe.python.solutions.pose as mp_pose 
+
+# --- PAGE SETUP ---
 st.set_page_config(page_title="PhysioForm")
 st.title("PhysioForm: Clinical Movement Tracker")
 
-
+# Use standard web-native solution mapping
+mp_pose = mp.solutions.pose
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -27,6 +29,7 @@ class PhysioProcessor(VideoProcessorBase):
         self.counter = 0
         self.stage = None
         self.exercise_type = "Squat"
+        # Explicitly initialize the pose tracker instance safely
         self.pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     def recv(self, frame):
