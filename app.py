@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
 import av
 import cv2
 import numpy as np
@@ -66,7 +66,7 @@ class PhysioProcessor(VideoProcessorBase):
 
 ctx = webrtc_streamer(
     key="physioform",
-    mode="SENDRECV",  # <-- ADD THIS
+    mode=WebRtcMode.SENDRECV,  # <-- changed from "SENDRECV"
     video_processor_factory=PhysioProcessor,
     rtc_configuration={
         "iceServers": [
@@ -78,8 +78,8 @@ ctx = webrtc_streamer(
             }
         ]
     },
-    media_stream_constraints={"video": True, "audio": False},  # <-- ADD THIS
-    async_processing=True,  # <-- ADD THIS
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
 )
 
 if ctx.video_processor:
