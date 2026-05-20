@@ -1,1 +1,1 @@
-libgll
+libgl1
