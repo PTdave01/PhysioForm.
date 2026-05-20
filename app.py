@@ -66,6 +66,7 @@ class PhysioProcessor(VideoProcessorBase):
 
 ctx = webrtc_streamer(
     key="physioform",
+    mode="SENDRECV",  # <-- ADD THIS
     video_processor_factory=PhysioProcessor,
     rtc_configuration={
         "iceServers": [
@@ -76,7 +77,9 @@ ctx = webrtc_streamer(
                 "credential": "openrelayproject"
             }
         ]
-    }
+    },
+    media_stream_constraints={"video": True, "audio": False},  # <-- ADD THIS
+    async_processing=True,  # <-- ADD THIS
 )
 
 if ctx.video_processor:
