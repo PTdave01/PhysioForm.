@@ -9,7 +9,7 @@ import mediapipe as mp
 st.set_page_config(page_title="PhysioForm")
 st.title("PhysioForm: Clinical Movement Tracker")
 
-# Use standard web-native solution mapping
+# Use stable legacy mediapipe solutions
 mp_pose = mp.solutions.pose
 
 def calculate_angle(a, b, c):
@@ -29,17 +29,19 @@ class PhysioProcessor(VideoProcessorBase):
         self.counter = 0
         self.stage = None
         self.exercise_type = "Squat"
-        # Explicitly initialize the pose tracker instance safely
         self.pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Process frame
         results = self.pose.process(img_rgb)
         
         if results.pose_landmarks:
             landmarks = results.pose_landmarks.landmark
             
+            # Extract landmarks based on exercise
             if self.exercise_type == "Squat":
                 pt1 = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y * img.shape[0]]
                 pt2 = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x * img.shape[1], landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y * img.shape[0]]
@@ -53,12 +55,14 @@ class PhysioProcessor(VideoProcessorBase):
 
             angle = calculate_angle(pt1, pt2, pt3)
             
+            # Rep Counting Logic
             if angle > down_thresh:
                 self.stage = "down"
             if angle < up_thresh and self.stage == "down":
                 self.stage = "up"
                 self.counter += 1
                 
+            # Draw on screen
             cv2.putText(img, f"{self.exercise_type.upper()} REPS: {self.counter}", 
                         (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
             cv2.putText(img, f"ANGLE: {int(angle)}", 
